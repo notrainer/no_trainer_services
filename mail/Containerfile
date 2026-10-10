@@ -1,6 +1,7 @@
-FROM ubuntu:latest
+FROM docker.io/library/ubuntu:26.04
 
-RUN apt-get update && apt-get install -y postfix
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postfix \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY main.cf /etc/postfix/main.cf
 

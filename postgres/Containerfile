@@ -1,15 +1,12 @@
-FROM postgres:latest
+FROM docker.io/library/postgres:18.6
 
-# Set environment variables
+# Deliberately weak training credentials; isolate this container.
 ENV POSTGRES_USER=admin
 ENV POSTGRES_PASSWORD=password123
 ENV POSTGRES_DB=mock_database
-# Configure the lab's trust authentication during database initialization.
 ENV POSTGRES_HOST_AUTH_METHOD=trust
 
-# Copy the initial SQL script to create tables and insert data
 COPY init.sql /docker-entrypoint-initdb.d/
 
-# Expose the PostgreSQL port
 EXPOSE 5432
-
+CMD ["postgres", "-c", "listen_addresses=*"]

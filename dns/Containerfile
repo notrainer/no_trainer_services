@@ -1,6 +1,7 @@
-FROM ubuntu:latest
+FROM docker.io/library/ubuntu:26.04
 
-RUN apt-get update && apt-get install -y bind9
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends bind9 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY named.conf /etc/bind/named.conf
 COPY db.example.com /etc/bind/db.example.com

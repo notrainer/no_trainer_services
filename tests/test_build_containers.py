@@ -12,7 +12,7 @@ SERVICES = ("dns", "ldap", "mail", "postgres", "samba", "vsftpd")
 
 
 class PublicationTest(unittest.TestCase):
-    def run_script(self, failure=""):
+    def run_script(self, failure="", push=False, tag=""):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shutil.copy2(SCRIPT, root / SCRIPT.name)
@@ -36,25 +36,46 @@ sys.exit(1 if sys.argv[1] == os.environ["FAIL_OPERATION"] else 0)
                 "GITHUB_REPOSITORY": "notrainer/no_trainer_services",
                 "GITHUB_SHA": "a" * 40,
             }
-            result = subprocess.run(["bash", str(root / SCRIPT.name)], cwd=root.parent,
+            env.pop("REGISTRY", None)
+            env.pop("TAG", None)
+            if tag:
+                env["TAG"] = tag
+            command = ["bash", str(root / SCRIPT.name)]
+            if push:
+                command.append("--push")
+            result = subprocess.run(command, cwd=root.parent,
                                     env=env, capture_output=True, text=True)
             calls = [json.loads(line) for line in log.read_text().splitlines()]
             return result, calls
 
-    def test_owner_labels_and_only_six_services(self):
+    def test_local_build_does_not_publish(self):
         result, calls = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(calls), 18)
+        self.assertEqual(len(calls), 6)
         for index, service in enumerate(SERVICES):
-            build, latest, revision = calls[index * 3:index * 3 + 3]
+            build = calls[index]
             image = f"ghcr.io/notrainer/no_trainer_{service}"
             self.assertEqual(build[0], "build")
             self.assertEqual(build[-1], service)
+            self.assertIn("--pull=always", build)
+            self.assertIn("--no-cache", build)
             self.assertIn(f"{service}/Containerfile", build)
             self.assertIn("org.opencontainers.image.source=https://github.com/notrainer/no_trainer_services", build)
             self.assertIn("org.opencontainers.image.revision=" + "a" * 40, build)
+            self.assertIn(image + ":latest", build)
+            self.assertIn(image + ":" + "a" * 40, build)
+
+    def test_publish_latest_revision_and_release_tag(self):
+        result, calls = self.run_script(push=True, tag="v1.2.3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls), 24)
+        for index, service in enumerate(SERVICES):
+            build, revision, release, latest = calls[index * 4:index * 4 + 4]
+            image = f"ghcr.io/notrainer/no_trainer_{service}"
+            self.assertIn(image + ":v1.2.3", build)
             self.assertEqual(latest, ["push", image + ":latest"])
             self.assertEqual(revision, ["push", image + ":" + "a" * 40])
+            self.assertEqual(release, ["push", image + ":v1.2.3"])
 
     def test_failed_build_stops_before_publishing(self):
         result, calls = self.run_script("build")
@@ -62,7 +83,7 @@ sys.exit(1 if sys.argv[1] == os.environ["FAIL_OPERATION"] else 0)
         self.assertEqual([call[0] for call in calls], ["build"])
 
     def test_failed_push_stops_before_next_image(self):
-        result, calls = self.run_script("push")
+        result, calls = self.run_script("push", push=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual([call[0] for call in calls], ["build", "push"])
 
