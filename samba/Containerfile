@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y samba
 
 COPY smb.conf /etc/samba/smb.conf
 
-RUN useradd -m -s /bin/bash sambauser && echo -e "password\npassword" | smbpasswd -a -s sambauser
+RUN useradd -m -s /bin/bash sambauser && printf 'password\npassword\n' | smbpasswd -a -s sambauser
 
 EXPOSE 137 138 139 445
 
